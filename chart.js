@@ -79,8 +79,9 @@ export function createChart(plot, legend, tooltip, readout) {
       const hour = Number(hourFormat.format(time));
       if (days === 1 ? hour % (width < 450 ? 6 : 3) === 0 : hour === 12) {
         const day = dayFormat.formatToParts(time);
-        const label = days === 1 ? `${hour % 12 || 12}${hour < 12 ? 'am' : 'pm'}`
-          : `${day.find(part => part.type === 'weekday').value.slice(0, 2)} ${day.find(part => part.type === 'day').value}`;
+        const weekday = day.find(part => part.type === 'weekday').value.slice(0, 2);
+        const label = days === 1 ? `${weekday} ${hour % 12 || 12}${hour < 12 ? 'am' : 'pm'}`
+          : `${weekday} ${day.find(part => part.type === 'day').value}`;
         ticks.push({i, label});
       }
     }
