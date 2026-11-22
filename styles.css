@@ -85,7 +85,7 @@ h3 { margin: 20px 0 8px; font-size: .95rem; }
 .swatch.category { flex-basis: 10px; height: 8px; background: var(--series); border: 0; margin-inline: 5px; }
 #tooltip { position: absolute; z-index: 2; pointer-events: none; background: var(--card); border: 1px solid var(--border); box-shadow: 0 4px 18px #0002; border-radius: 8px; padding: 8px 10px; font-size: .8rem; max-width: 215px; }
 #tooltip strong { display: block; margin-bottom: 4px; }
-#tooltip div { color: var(--muted); }
+#tooltip div { display: flex; align-items: center; gap: 7px; color: var(--muted); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 760px) {
   .wrap { width: calc(100% - 12px); }

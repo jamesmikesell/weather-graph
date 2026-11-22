@@ -10,6 +10,14 @@ function svg(parent, name, attributes, label) {
   return node;
 }
 
+function createSwatch(series) {
+  const swatch = document.createElement('span');
+  swatch.className = `swatch ${series.style ?? ''}`;
+  swatch.style.setProperty('--series', `var(--${series.color})`);
+  swatch.setAttribute('aria-hidden', 'true');
+  return swatch;
+}
+
 function axisBounds(values, fromZero = false) {
   const min = fromZero ? 0 : Math.min(...values) - 5;
   const max = fromZero ? Math.max(5, ...values) : Math.max(...values) + 5;
@@ -193,10 +201,7 @@ export function createChart(plot, legend, tooltip, readout) {
       button.type = 'button';
       button.dataset.series = series.key;
       button.setAttribute('aria-pressed', String(!hidden.has(series.key)));
-      const swatch = document.createElement('span');
-      swatch.className = `swatch ${series.style ?? ''}`;
-      swatch.style.setProperty('--series', `var(--${series.color})`);
-      button.append(swatch, series.label);
+      button.append(createSwatch(series), series.label);
       button.addEventListener('click', () => {
         if (!hidden.delete(series.key)) hidden.add(series.key);
         render();
@@ -215,21 +220,20 @@ export function createChart(plot, legend, tooltip, readout) {
     const heading = document.createElement('strong');
     heading.textContent = title;
     const lines = [];
+    const rows = [];
     for (const series of [...SERIES, ...metrics.activeTypes]) {
       if (hidden.has(series.key)) continue;
       const value = current.values[series.key][offset + inspection];
-      if (series.style === 'category') {
-        if (value) lines.push(series.label);
-      } else if (value != null) {
-        const unit = {temperature: ' °F', wind: ' mph', probability: '%'}[series.panel];
-        lines.push(`${series.label}: ${Math.round(value)}${unit}`);
-      }
-    }
-    tooltip.replaceChildren(heading, ...lines.map(line => {
+      const category = series.style === 'category';
+      if (category ? !value : value == null) continue;
+      const unit = {temperature: ' °F', wind: ' mph', probability: '%'}[series.panel];
+      const line = category ? series.label : `${series.label}: ${Math.round(value)}${unit}`;
       const row = document.createElement('div');
-      row.textContent = line;
-      return row;
-    }));
+      row.append(createSwatch(series), line);
+      lines.push(line);
+      rows.push(row);
+    }
+    tooltip.replaceChildren(heading, ...rows);
     tooltip.hidden = false;
     tooltip.style.left = `${Math.max(0, Math.min(plot.clientWidth - tooltip.offsetWidth, x + (x > plot.clientWidth / 2 ? -tooltip.offsetWidth - 10 : 10)))}px`;
     tooltip.style.top = `${Math.max(0, Math.min(metrics.bottom - tooltip.offsetHeight, offsetY + 10))}px`;
