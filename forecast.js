@@ -101,9 +101,7 @@ export function temperatureTurns(values) {
     const change = point.value - candidate.value;
     if (!direction && Math.abs(change) < 5) continue;
     if (direction && Math.abs(change) >= 5 && Math.sign(change) !== direction) {
-      if (!turns.length || candidate.index - turns.at(-1).index >= 4) {
-        turns.push({...candidate, high: direction > 0});
-      }
+      turns.push({...candidate, high: direction > 0});
     } else if (direction && change * direction <= 0) {
       continue;
     }

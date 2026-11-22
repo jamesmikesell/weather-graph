@@ -1,4 +1,4 @@
-import {HOUR, FORECAST_HOURS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=2';
+import {HOUR, FORECAST_HOURS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=3';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -146,15 +146,18 @@ export function createChart(plot, legend, tooltip, readout) {
       });
     }
     if (!hidden.has('temperature')) {
-      let lastX = -Infinity;
+      let lastHighX = -Infinity;
+      let lastLowX = -Infinity;
       for (const {value, index, high} of temperatureTurns(current.values.temperature)
         .filter(turn => turn.index >= offset && turn.index < offset + count)
         .map(turn => ({...turn, index: turn.index - offset}))) {
         const position = x(index);
+        const lastX = high ? lastHighX : lastLowX;
         if (position - lastX < 26) continue;
-        lastX = position;
+        if (high) lastHighX = position;
+        else lastLowX = position;
         svg(root, 'text', {x: position, y: panels.temperature.y(value) + (high ? -9 : 15),
-          'text-anchor': 'middle', class: 'turn'}, Math.round(value));
+          'text-anchor': 'middle', class: high ? 'turn high' : 'turn low'}, Math.round(value));
       }
     }
 
