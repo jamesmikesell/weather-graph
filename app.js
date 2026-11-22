@@ -28,7 +28,7 @@ const refresh = byId('refresh');
 const range = byId('range');
 const chart = byId('chart');
 const draw = createChart(byId('plot'), byId('legend'), byId('tooltip'), byId('chart-readout'));
-const fallback = {lat: 40.6738, lon: -80.1207};
+const LOCATION_RADIUS_METERS = 1609.344;
 
 const {L} = window;
 let map;
@@ -36,7 +36,8 @@ let marker;
 let selection;
 let forecast;
 let request;
-let locationAttempt = 0;
+let automaticLocation;
+let locationPermission;
 let days = 7;
 
 function applyTheme() {
@@ -98,12 +99,11 @@ for (let length = 1; length <= 7; length++) {
   range.append(button);
 }
 
-function choosePoint(point, {fromMap = false, preserveStatus = false, fromDevice = false} = {}) {
-  locationAttempt++;
-  locate.disabled = false;
-  if (!preserveStatus) showLocationStatus();
+function choosePoint(point, {fromMap = false, source = 'manual'} = {}) {
+  if (source === 'manual') stopAutomaticLocation();
+  showLocationStatus();
   closeSuggestions();
-  selection = {lat: point.lat, lon: point.lon ?? point.lng, name: point.name, fromDevice};
+  selection = {lat: point.lat, lon: point.lon ?? point.lng, name: point.name, source};
   if (map) {
     const position = [selection.lat, selection.lon];
     if (!marker) marker = L.circleMarker(position, {radius: 6, color: '#fff', weight: 2, fillColor: '#247fd0', fillOpacity: 1, interactive: false}).addTo(map);
@@ -121,13 +121,14 @@ async function loadForecast() {
   const selected = selection;
   const timeout = setTimeout(() => controller.abort('timeout'), 20000);
   forecast = null;
-  const locationCoordinates = selected.fromDevice ? '' : coordinates(selected);
+  const locationCoordinates = selected.source === 'manual' ? coordinates(selected) : '';
+  const locationDetail = selected.source === 'ip' ? 'Approximate location from IP' : locationCoordinates;
   const defaultLabel = locationCoordinates || 'Current location';
   place.textContent = selected.name || defaultLabel;
   status.textContent = 'Loading the NWS grid forecast…';
   status.hidden = false;
-  metadata.textContent = locationCoordinates;
-  metadata.hidden = !locationCoordinates;
+  metadata.textContent = locationDetail;
+  metadata.hidden = !locationDetail;
   chart.hidden = range.hidden = true;
   refresh.hidden = false;
   refresh.disabled = true;
@@ -141,7 +142,7 @@ async function loadForecast() {
     const update = Number.isFinite(result.updated) ? new Intl.DateTimeFormat('en-US', {
       timeZone: zone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
     }).format(result.updated) : null;
-    metadata.textContent = [locationCoordinates, update && `Updated ${update}`].filter(Boolean).join(' · ');
+    metadata.textContent = [locationDetail, update && `Updated ${update}`].filter(Boolean).join(' · ');
     metadata.hidden = !metadata.textContent;
     status.hidden = true;
     chart.hidden = range.hidden = false;
@@ -157,35 +158,107 @@ async function loadForecast() {
   }
 }
 
-function useLocation(initial = false) {
-  const attempt = ++locationAttempt;
-  locate.disabled = true;
-  showLocationStatus('Finding your location…');
-  const failed = () => {
-    if (attempt !== locationAttempt) return;
-    locate.disabled = false;
-    if (initial && !selection) {
-      showLocationStatus('Location unavailable. Showing the reference forecast near Pittsburgh, PA.');
-      choosePoint(fallback, {preserveStatus: true});
-    } else {
-      showLocationStatus('Location unavailable. Check browser permissions or choose a location below.');
+function distanceMeters(a, b) {
+  const radians = Math.PI / 180;
+  const latA = a.lat * radians;
+  const latB = b.lat * radians;
+  const lonDifference = (b.lon - a.lon) * radians;
+  const haversine = Math.sin((latB - latA) / 2) ** 2
+    + Math.cos(latA) * Math.cos(latB) * Math.sin(lonDifference / 2) ** 2;
+  return 2 * 6371008.8 * Math.asin(Math.sqrt(Math.min(1, haversine)));
+}
+
+function stopAutomaticLocation() {
+  if (!automaticLocation) return;
+  const {watch, ipRequest} = automaticLocation;
+  automaticLocation = undefined;
+  if (watch != null) navigator.geolocation.clearWatch(watch);
+  ipRequest?.abort();
+}
+
+function canEstimateLocation() {
+  const state = locationPermission?.state;
+  return state === 'prompt' || state === 'denied';
+}
+
+async function estimateLocation(session) {
+  if (automaticLocation !== session || selection || session.ipAttempted || !canEstimateLocation()) return;
+  session.ipAttempted = true;
+  status.textContent = 'Finding your approximate location…';
+  const controller = new AbortController();
+  session.ipRequest = controller;
+  const timeout = setTimeout(() => controller.abort(), 6500);
+  try {
+    const response = await fetch('https://get.geojs.io/v1/ip/geo.json', {
+      signal: controller.signal, credentials: 'omit', cache: 'no-store',
+    });
+    if (!response.ok) throw new Error('IP location unavailable');
+    const {latitude, longitude} = await response.json();
+    const lat = typeof latitude === 'string' && latitude.trim() ? Number(latitude) : NaN;
+    const lon = typeof longitude === 'string' && longitude.trim() ? Number(longitude) : NaN;
+    if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) {
+      throw new Error('IP location unavailable');
     }
-  };
-  const deadline = setTimeout(failed, 10000);
+    if (automaticLocation === session && !selection && canEstimateLocation()) {
+      choosePoint({lat, lon}, {source: 'ip'});
+    }
+  } catch {
+    if (automaticLocation !== session || selection || !canEstimateLocation()) return;
+    const message = 'Approximate location unavailable. Use device location, search for a city, or pick a point on the map.';
+    status.textContent = message;
+    status.hidden = false;
+  } finally {
+    clearTimeout(timeout);
+    session.ipRequest = undefined;
+  }
+}
+
+function useLocation() {
+  stopAutomaticLocation();
+  const session = {};
+  automaticLocation = session;
+  showLocationStatus('Finding your device location…');
+  if (!selection) {
+    status.textContent = 'Finding your location…';
+    status.hidden = false;
+  }
+
+  function deviceLocationUnavailable() {
+    if (automaticLocation !== session) return;
+    showLocationStatus('Device location is unavailable. Check browser permissions or choose another location.');
+    if (!selection && !session.ipAttempted) {
+      status.textContent = 'Device location unavailable. Search for a city or pick a point on the map.';
+    }
+    estimateLocation(session);
+  }
+
   if (!navigator.geolocation) {
-    clearTimeout(deadline);
-    failed();
+    deviceLocationUnavailable();
     return;
   }
-  navigator.geolocation.getCurrentPosition(({coords}) => {
-    clearTimeout(deadline);
-    if (attempt === locationAttempt) choosePoint({lat: coords.latitude, lon: coords.longitude}, {fromDevice: true});
-  }, () => {
-    clearTimeout(deadline);
-    failed();
-  }, {timeout: 8500, maximumAge: 300000});
+  estimateLocation(session);
+
+  session.watch = navigator.geolocation.watchPosition(({coords}) => {
+    if (automaticLocation !== session) return;
+    session.ipRequest?.abort();
+    showLocationStatus();
+    const point = {lat: coords.latitude, lon: coords.longitude};
+    if (selection?.source === 'device' && distanceMeters(selection, point) < LOCATION_RADIUS_METERS) return;
+    choosePoint(point, {source: 'device'});
+  }, deviceLocationUnavailable, {enableHighAccuracy: true, maximumAge: 30000, timeout: 8500});
 }
-locate.addEventListener('click', () => useLocation());
+
+navigator.permissions?.query({name: 'geolocation'}).then(permission => {
+  locationPermission = permission;
+  if (automaticLocation) estimateLocation(automaticLocation);
+  permission.addEventListener('change', () => {
+    if (!automaticLocation) return;
+    if (permission.state === 'granted') useLocation();
+    else estimateLocation(automaticLocation);
+  });
+}).catch(() => {});
+
+locate.addEventListener('click', useLocation);
 refresh.addEventListener('click', loadForecast);
 
 const stateNames = Object.fromEntries(
@@ -309,4 +382,4 @@ city.addEventListener('keydown', event => {
   [...suggestions.children].forEach((option, i) => option.setAttribute('aria-selected', String(i === active)));
 });
 
-useLocation(true);
+useLocation();

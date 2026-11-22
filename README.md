@@ -12,7 +12,9 @@ npm install
 npm start
 ```
 
-Open [http://localhost:8000](http://localhost:8000). The browser reloads when you save changes to the HTML, CSS, JavaScript, or JSON data files. Device location requires HTTPS or localhost and browser permission. When it is unavailable on startup, the app uses the coordinates from the reference script near Pittsburgh, Pennsylvania.
+Open [http://localhost:8000](http://localhost:8000). The browser reloads when you save changes to the HTML, CSS, JavaScript, or JSON data files. Device location requires HTTPS or localhost and browser permission. The browser requests an approximate location from GeoJS only when the browser reports that permission has yet to be granted or was denied. If permission is granted or its state is unknown, the app skips the IP lookup. A device fix replaces the approximate forecast as soon as permission and location are available. Later device updates use a one-mile radius measured from the location used for the current forecast. Selecting a city or map point stops automatic location tracking.
+
+The browser calls [GeoJS](https://www.geojs.io/docs/v1/endpoints/geo/) directly over HTTPS. Its IP location endpoint needs no key or server configuration and is subject to the [GeoJS terms](https://www.geojs.io/tos/).
 
 ## Install on your phone
 
