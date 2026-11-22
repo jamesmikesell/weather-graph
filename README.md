@@ -1,5 +1,8 @@
 # Weather Grid
 
+View at:
+<https://jamesmikesell.github.io/weather-graph/>
+
 A static, forecast-only National Weather Service meteogram. The browser queries the NWS point lookup and grid forecast directly. City autocomplete uses the 2025 Census Gazetteer Places and County Subdivisions files. The index includes 35,635 entries with Census functional status A or B, meaning they have officials providing primary general-purpose local government services. It covers active incorporated places and governing county subdivisions, including New England towns and townships. County names distinguish same-named subdivisions in the same state. Census-designated places and subdivisions administered by another government are excluded.
 
 Serve this directory on any static host. For local development, run:
