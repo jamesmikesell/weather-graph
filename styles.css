@@ -29,13 +29,13 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; background: var(--page); color: var(--text); font: 1rem/1.45 system-ui, sans-serif; }
+body { margin: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--page); color: var(--text); font: 1rem/1.45 system-ui, sans-serif; }
 .wrap { width: min(1320px, calc(100% - 48px)); margin-inline: auto; }
 .site-header { background: var(--card); border-bottom: 1px solid var(--border); }
 .header-inner { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand, .theme { display: flex; align-items: center; gap: 10px; }
 .brand { font-weight: 750; white-space: nowrap; }
-.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--wash); color: var(--accent); font-size: 26px; line-height: 1; }
+.brand-mark { display: block; border-radius: 8px; }
 .theme { color: var(--muted); font-size: .875rem; }
 button, select, input { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 7px; }
 button, select { padding: .44rem .68rem; cursor: pointer; }

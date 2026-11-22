@@ -11,6 +11,17 @@ npm start
 
 Open [http://localhost:8000](http://localhost:8000). The browser reloads when you save changes to the HTML, CSS, JavaScript, or JSON data files. Device location requires HTTPS or localhost and browser permission. When it is unavailable on startup, the app uses the coordinates from the reference script near Pittsburgh, Pennsylvania.
 
+## Install on your phone
+
+Open the HTTPS-hosted app in your phone's browser. The installed app launches from the Weather Grid icon in its own window.
+
+- iOS Safari — Share → Add to Home Screen → turn on Open as Web App if shown → Add.
+- Android Chrome — Menu → Install app or Add to Home screen → Install.
+
+Live forecasts and map tiles require an internet connection.
+
+## Data sources
+
 To regenerate the bundled search index, run `python3 scripts/update-places.py`.
 
 The forecast uses the selected location’s time zone. Map controls use Leaflet and OpenStreetMap tiles. The map and live forecast require internet access.

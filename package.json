@@ -2,7 +2,7 @@
   "name": "weather-grid",
   "private": true,
   "scripts": {
-    "start": "browser-sync start --server --listen 127.0.0.1 --port 8000 --files \"index.html,styles.css,*.js,data/*.json\" --no-open --no-ui --no-notify --no-inject-changes"
+    "start": "browser-sync start --server --listen 127.0.0.1 --port 8000 --files \"index.html,styles.css,*.js,data/*.json,manifest.webmanifest,icons/*.png\" --no-open --no-ui --no-notify --no-inject-changes"
   },
   "devDependencies": {
     "browser-sync": "3.0.4"

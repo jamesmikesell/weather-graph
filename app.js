@@ -197,8 +197,10 @@ let dataset;
 let results = [];
 let active = -1;
 let searchVersion = 0;
+let searchTimer;
 
 function closeSuggestions() {
+  clearTimeout(searchTimer);
   searchVersion++;
   results = [];
   active = -1;
@@ -225,12 +227,16 @@ function selectCity(index) {
   choosePoint({lat, lon, name: label});
 }
 
-async function search() {
+function scheduleSearch() {
   closeSuggestions();
   searchStatus.textContent = '';
-  const version = searchVersion;
   const query = normalize(city.value);
   if (query.length < 2) return;
+  const version = searchVersion;
+  searchTimer = setTimeout(() => search(query, version), 180);
+}
+
+async function search(query, version) {
   try {
     dataset ??= fetch('data/places.json?v=2').then(response => {
       if (!response.ok) throw new Error('Place index unavailable');
@@ -285,8 +291,8 @@ async function search() {
   }
 }
 
-city.addEventListener('input', search);
-city.addEventListener('focus', search);
+city.addEventListener('input', scheduleSearch);
+city.addEventListener('focus', scheduleSearch);
 city.addEventListener('blur', closeSuggestions);
 city.addEventListener('keydown', event => {
   if (event.key === 'Escape') closeSuggestions();
