@@ -18,6 +18,17 @@ function createSwatch(series) {
   return swatch;
 }
 
+function trimZeroRuns(visible, full, offset) {
+  return visible.map((value, index) => {
+    if (value !== 0) return value;
+    const before = full[offset + index - 1];
+    const after = full[offset + index + 1];
+    const inRun = before === 0 || after === 0;
+    const touchesNonzero = before > 0 || after > 0;
+    return inRun && !touchesNonzero ? null : value;
+  });
+}
+
 function axisBounds(values, fromZero = false) {
   const min = fromZero ? 0 : Math.min(...values) - 5;
   const max = fromZero ? Math.max(5, ...values) : Math.max(...values) + 5;
@@ -139,12 +150,19 @@ export function createChart(plot, legend, tooltip, readout) {
       const {y} = panels[series.panel];
       let previous = null;
       let path = '';
-      values[series.key].forEach((value, index, visible) => {
+      const percentage = series.panel === 'probability';
+      const visible = percentage
+        ? trimZeroRuns(values[series.key], current.values[series.key], offset)
+        : values[series.key];
+      visible.forEach((value, index) => {
         if (value != null) {
-          if (previous == null && visible[index + 1] == null) {
+          const connectsBefore = previous != null && !(percentage && previous === 0 && value === 0);
+          const next = visible[index + 1];
+          const connectsAfter = next != null && !(percentage && value === 0 && next === 0);
+          if (!connectsBefore && !connectsAfter) {
             svg(root, 'circle', {cx: x(index), cy: y(value), r: 2, fill: `var(--${series.color})`});
           }
-          path += `${previous == null ? 'M' : 'L'}${x(index)},${y(value)}`;
+          path += `${connectsBefore ? 'L' : 'M'}${x(index)},${y(value)}`;
         }
         previous = value;
       });
