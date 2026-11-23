@@ -1,4 +1,4 @@
-import {HOUR, FORECAST_HOURS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=3';
+import {HOUR, FORECAST_HOURS, ACCUMULATIONS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=7';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -27,6 +27,30 @@ function trimZeroRuns(visible, full, offset) {
     const touchesNonzero = before > 0 || after > 0;
     return inRun && !touchesNonzero ? null : value;
   });
+}
+
+function formatInches(inches) {
+  return inches > 0 && inches < .01 ? '<0.01' : inches.toFixed(2);
+}
+
+function accumulationPeriods(amounts, offset, count) {
+  const periods = [];
+  for (let start = 0; start < offset + count;) {
+    const amount = amounts[start];
+    let end = start + 1;
+    while (end < amounts.length && amounts[end] === amount) end++;
+    if (amount?.inches > 0 && end > offset) {
+      const fraction = Math.min(1, (end - start) / amount.hours);
+      periods.push({
+        start: Math.max(start, offset) - offset,
+        end: Math.min(end, offset + count) - offset,
+        inches: amount.inches * fraction,
+        estimated: fraction < 1,
+      });
+    }
+    start = end;
+  }
+  return periods;
 }
 
 function axisBounds(values, fromZero = false) {
@@ -79,11 +103,66 @@ export function createChart(plot, legend, tooltip, readout) {
       probability: {top: width < 450 ? 271 : 338, height: width < 450 ? 205 : 264, label: 'Probability (%)'},
     };
     const probabilityEnd = panels.probability.top + panels.probability.height;
-    const typeHeight = activeTypes.length * 27;
+    const root = svg(plot, 'svg', {'aria-hidden': 'true'});
+    const pendingLabels = svg(root, 'g', {});
+    const amountRows = new Map();
+    for (const {key, type, shortLabel, color} of ACCUMULATIONS) {
+      const labels = [];
+      const laneEnds = [];
+      const groups = [];
+      const sample = svg(pendingLabels, 'text', {class: 'precip-amount'});
+      function placeAmount(period) {
+        const {start, end, inches, estimated} = period;
+        const xStart = x(start);
+        const xEnd = x(end);
+        const caption = `${estimated ? '≈' : ''}${formatInches(inches)}"${shortLabel ? ` ${shortLabel}` : ''}`;
+        sample.textContent = caption;
+        const half = sample.getComputedTextLength() / 2;
+        const position = Math.max(left + half, Math.min(right - half, (xStart + xEnd) / 2));
+        return {...period, caption, xStart, xEnd, position, leftEdge: position - half, rightEdge: position + half};
+      }
+
+      for (const period of accumulationPeriods(current.accumulations[key], offset, count)) {
+        const placed = placeAmount(period);
+        const previous = groups.at(-1);
+        if (previous?.end === placed.start && previous.rightEdge + 4 > placed.leftEdge) {
+          groups[groups.length - 1] = placeAmount({
+            start: previous.start, end: placed.end,
+            inches: previous.inches + placed.inches, estimated: previous.estimated || placed.estimated,
+          });
+        } else {
+          groups.push(placed);
+        }
+      }
+      sample.remove();
+
+      for (const {caption, xStart, xEnd, position, leftEdge, rightEdge} of groups) {
+        const label = svg(pendingLabels, 'text', {class: 'precip-amount', x: position,
+          'text-anchor': 'middle', 'dominant-baseline': 'central'}, caption);
+        const available = laneEnds.findIndex(end => end + 4 <= leftEdge);
+        const lane = available < 0 ? laneEnds.length : available;
+        laneEnds[lane] = rightEdge;
+        labels.push({label, lane, xStart, xEnd, color});
+      }
+      if (labels.length) amountRows.set(type, {labels, height: laneEnds.length * 18});
+    }
+    const typeRows = new Map();
+    let typeHeight = 0;
+    for (const key of new Set([...activeTypes.map(type => type.key), ...amountRows.keys()])) {
+      if (activeTypes.some(type => type.key === key)) {
+        typeRows.set(key, typeHeight);
+        typeHeight += 27;
+      }
+      const amounts = amountRows.get(key);
+      if (amounts) {
+        amounts.top = typeHeight;
+        typeHeight += amounts.height;
+      }
+    }
     if (typeHeight) panels.category = {top: probabilityEnd + 15, height: typeHeight};
     panels.wind = {top: probabilityEnd + (typeHeight ? typeHeight + 30 : 16), height: 118, label: 'Wind (mph)'};
     const bottom = panels.wind.top + panels.wind.height;
-    const root = svg(plot, 'svg', {viewBox: `0 0 ${width} ${bottom + 54}`, 'aria-hidden': 'true'});
+    root.setAttribute('viewBox', `0 0 ${width} ${bottom + 54}`);
     const temps = SERIES.filter(s => s.panel === 'temperature')
       .flatMap(s => values[s.key].filter(Number.isFinite));
     const winds = SERIES.filter(s => s.panel === 'wind')
@@ -188,8 +267,8 @@ export function createChart(plot, legend, tooltip, readout) {
       }
     }
 
-    activeTypes.forEach((type, row) => {
-      const y = panels.category.top + 13 + row * 27;
+    activeTypes.forEach(type => {
+      const y = panels.category.top + typeRows.get(type.key) + 13;
       const label = type.key === 'freezingRain' ? 'Fz Rain' : type.label;
       svg(root, 'text', {x: left - 3, y, 'text-anchor': 'end', 'dominant-baseline': 'central'}, label);
       if (hidden.has(type.key)) return;
@@ -203,6 +282,15 @@ export function createChart(plot, legend, tooltip, readout) {
         }
       }
     });
+
+    for (const {top, labels} of amountRows.values()) {
+      for (const {label, lane, xStart, xEnd, color} of labels) {
+        const y = panels.category.top + top + 8 + lane * 18;
+        label.setAttribute('y', y);
+        line(pendingLabels, xStart, y + 7, xEnd, y + 7, `var(--${color})`);
+      }
+    }
+    root.append(pendingLabels);
 
     svg(root, 'text', {x: (left + right) / 2, y: bottom + 44, 'text-anchor': 'middle', class: 'axis-label'}, 'Forecast Time');
     const cursor = svg(root, 'g', {visibility: 'hidden'});
@@ -248,6 +336,17 @@ export function createChart(plot, legend, tooltip, readout) {
       const line = category ? series.label : `${series.label}: ${Math.round(value)}${unit}`;
       const row = document.createElement('div');
       row.append(createSwatch(series), line);
+      lines.push(line);
+      rows.push(row);
+    }
+    for (const {key, label} of ACCUMULATIONS) {
+      const amount = current.accumulations[key][offset + inspection];
+      if (key === 'snowfallAmount' && !(amount?.inches > 0)) continue;
+      const detail = amount == null ? 'Unavailable'
+        : `${formatInches(amount.inches)} in (${Number(amount.hours.toFixed(2))} h total)`;
+      const line = `${label}: ${detail}`;
+      const row = document.createElement('div');
+      row.textContent = line;
       lines.push(line);
       rows.push(row);
     }

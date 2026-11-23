@@ -1,5 +1,5 @@
-import {fetchForecast} from './forecast.js?v=3';
-import {createChart} from './chart.js?v=7';
+import {fetchForecast} from './forecast.js?v=7';
+import {createChart} from './chart.js?v=13';
 
 const byId = id => document.getElementById(id);
 const theme = byId('theme');

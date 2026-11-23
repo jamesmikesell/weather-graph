@@ -14,6 +14,11 @@ export const SERIES = [
   ['probabilityOfThunder', 'Thunder Probability', 'thunder', 'probability', 'dotted'],
 ].map(([key, label, color, panel, style]) => ({key, label, color, panel, style}));
 
+export const ACCUMULATIONS = [
+  {key: 'quantitativePrecipitation', label: 'Liquid-equivalent precip.', type: 'rain', color: 'precip'},
+  {key: 'snowfallAmount', label: 'Snow accumulation', type: 'snow', shortLabel: 'snow', color: 'dew'},
+];
+
 export const TYPES = [
   ['rain', 'Rain', 'precip', /rain|drizzle|showers/],
   ['thunder', 'Thunder', 'storm', /thunder/],
@@ -31,13 +36,13 @@ export function interval(validTime) {
   return [start, start + (days * 86400 + hours * 3600 + minutes * 60 + seconds) * 1000];
 }
 
-function hourly(field, first) {
+function hourly(field, first, convert = value => value) {
   const hours = Array(FORECAST_HOURS).fill(null);
   for (const entry of field?.values ?? []) {
     const [start, end] = interval(entry.validTime);
     const firstIndex = Math.max(0, Math.ceil((start - first) / HOUR));
     const lastIndex = Math.min(hours.length, Math.ceil((end - first) / HOUR));
-    if (firstIndex < lastIndex) hours.fill(entry.value, firstIndex, lastIndex);
+    if (firstIndex < lastIndex) hours.fill(convert(entry.value, end - start), firstIndex, lastIndex);
   }
   return hours;
 }
@@ -71,7 +76,17 @@ export function buildForecast(properties, now = Date.now()) {
       return type.pattern.test(code);
     }));
   }
-  return {first, values, updated: Date.parse(properties.updateTime)};
+  const accumulations = Object.fromEntries(ACCUMULATIONS.map(({key}) => {
+    const field = properties[key];
+    const unit = field?.uom?.split(':').at(-1);
+    const unitsToInches = {mm: 1 / 25.4, cm: 1 / 2.54, m: 1 / .0254, in: 1};
+    const factor = unitsToInches[unit];
+    return [key, hourly(field, first, (value, duration) =>
+      Number.isFinite(value) && Number.isFinite(factor) && duration > 0
+        ? {inches: value * factor, hours: duration / HOUR}
+        : null)];
+  }));
+  return {first, values, accumulations, updated: Date.parse(properties.updateTime)};
 }
 
 export async function fetchForecast(lat, lon, signal) {
