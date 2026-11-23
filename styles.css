@@ -64,6 +64,11 @@ h3 { margin: 20px 0 8px; font-size: .95rem; }
 .muted { margin: 7px 0 0; color: var(--muted); font-size: .875rem; }
 .forecast-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
 .forecast-heading h2 { font-size: clamp(1.25rem, 3vw, 1.55rem); }
+#conditions { margin-top: 12px; padding: 8px 10px; background: var(--plot); border: 1px solid var(--border); border-radius: 8px; }
+#conditions h3 { margin: 0 0 3px; font-size: .875rem; }
+#conditions-values { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; margin: 0; font-size: .875rem; }
+#conditions-values span:first-child { font-weight: 650; }
+#conditions-source { margin-top: 3px; }
 .range { display: flex; flex-wrap: wrap; gap: 5px; margin: 15px 0; }
 .range button { min-width: 37px; font-size: .875rem; }
 .range button[aria-pressed="true"] { font-weight: 700; border-color: var(--accent); }

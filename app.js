@@ -1,5 +1,5 @@
-import {fetchForecast} from './forecast.js?v=7';
-import {createChart} from './chart.js?v=13';
+import {distanceMeters, fetchPoint, fetchForecast, fetchCurrentConditions} from './forecast.js?v=10';
+import {createChart} from './chart.js?v=16';
 
 const byId = id => document.getElementById(id);
 const theme = byId('theme');
@@ -24,6 +24,9 @@ const locate = byId('locate');
 const status = byId('forecast-status');
 const place = byId('place');
 const metadata = byId('metadata');
+const conditions = byId('conditions');
+const conditionsValues = byId('conditions-values');
+const conditionsSource = byId('conditions-source');
 const refresh = byId('refresh');
 const range = byId('range');
 const chart = byId('chart');
@@ -114,6 +117,31 @@ function choosePoint(point, {fromMap = false, source = 'manual'} = {}) {
   loadForecast();
 }
 
+function showConditions(observation, timeZone) {
+  if (!observation) {
+    conditionsValues.textContent = '';
+    conditionsSource.textContent = 'No recent nearby station report available.';
+    return;
+  }
+
+  const {description, temperature, humidity, wind, station, distance, observedAt} = observation;
+  const temperatureText = temperature == null ? null : `${Math.round(temperature)}°F`;
+  const summary = [temperatureText, description].filter(Boolean).join(' ');
+  const details = [summary, humidity == null ? null : `Humidity ${Math.round(humidity)}%`,
+    wind == null ? null : wind < .5 ? 'Calm wind' : `Wind ${Math.round(wind)} mph`].filter(Boolean);
+  conditionsValues.replaceChildren(...details.map(value => {
+    const item = document.createElement('span');
+    item.textContent = value;
+    return item;
+  }));
+
+  const time = new Intl.DateTimeFormat('en-US', {
+    timeZone, hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+  }).format(observedAt);
+  conditionsSource.textContent = [station, distance == null ? null : `${Math.round(distance / 1609.344)} mi away`,
+    `Observed ${time}`].filter(Boolean).join(' · ');
+}
+
 async function loadForecast() {
   request?.abort();
   const controller = new AbortController();
@@ -132,8 +160,22 @@ async function loadForecast() {
   chart.hidden = range.hidden = true;
   refresh.hidden = false;
   refresh.disabled = true;
+  conditions.hidden = true;
+  let observationWork;
   try {
-    const result = await fetchForecast(selected.lat, selected.lon, controller.signal);
+    const point = await fetchPoint(selected.lat, selected.lon, controller.signal);
+    if (request !== controller) return;
+    conditions.hidden = false;
+    conditionsValues.textContent = '';
+    conditionsSource.textContent = 'Looking up nearby station observations…';
+    observationWork = fetchCurrentConditions(point, selected, controller.signal)
+      .then(observation => {
+        if (request === controller) showConditions(observation, point.timeZone || 'UTC');
+      })
+      .catch(() => {
+        if (request === controller) showConditions(null);
+      });
+    const result = await fetchForecast(point, selected.lat, selected.lon, controller.signal);
     if (request !== controller) return;
     forecast = result;
     const nearby = result.point.relativeLocation?.properties;
@@ -153,19 +195,10 @@ async function loadForecast() {
     else if (controller.signal.reason === 'timeout') status.textContent = 'The NWS request timed out. Select Refresh to try again.';
     else status.textContent = 'Could not load the NWS forecast. Select Refresh to try again or choose another location.';
   } finally {
-    clearTimeout(timeout);
     if (request === controller) refresh.disabled = false;
+    await observationWork;
+    clearTimeout(timeout);
   }
-}
-
-function distanceMeters(a, b) {
-  const radians = Math.PI / 180;
-  const latA = a.lat * radians;
-  const latB = b.lat * radians;
-  const lonDifference = (b.lon - a.lon) * radians;
-  const haversine = Math.sin((latB - latA) / 2) ** 2
-    + Math.cos(latA) * Math.cos(latB) * Math.sin(lonDifference / 2) ** 2;
-  return 2 * 6371008.8 * Math.asin(Math.sqrt(Math.min(1, haversine)));
 }
 
 function stopAutomaticLocation() {

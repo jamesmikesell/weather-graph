@@ -89,22 +89,108 @@ export function buildForecast(properties, now = Date.now()) {
   return {first, values, accumulations, updated: Date.parse(properties.updateTime)};
 }
 
-export async function fetchForecast(lat, lon, signal) {
-  async function get(url) {
-    const response = await fetch(url, {headers: {Accept: 'application/geo+json'}, signal});
-    if (!response.ok) {
-      const error = new Error(`NWS responded with HTTP ${response.status}.`);
-      error.status = response.status;
-      throw error;
-    }
-    return (await response.json()).properties;
+async function getNws(url, signal) {
+  const response = await fetch(url, {headers: {Accept: 'application/geo+json'}, signal});
+  if (!response.ok) {
+    const error = new Error(`NWS responded with HTTP ${response.status}.`);
+    error.status = response.status;
+    throw error;
   }
-  const point = await get(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`);
-  if (!point?.forecastGridData) throw new Error('NWS returned no forecast grid for this point.');
-  const grid = await get(point.forecastGridData);
-  const forecast = buildForecast(grid);
+  return response.json();
+}
+
+export async function fetchPoint(lat, lon, signal) {
+  const result = await getNws(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`, signal);
+  return result.properties ?? {};
+}
+
+export async function fetchForecast(point, lat, lon, signal) {
+  if (!point.forecastGridData) throw new Error('NWS returned no forecast grid for this point.');
+  const {properties} = await getNws(point.forecastGridData, signal);
+  const forecast = buildForecast(properties);
   if (!forecast.values.temperature.some(Number.isFinite)) throw new Error('NWS returned no upcoming temperatures for this point.');
   return {...forecast, point, lat, lon};
+}
+
+export function distanceMeters(a, b) {
+  const radians = Math.PI / 180;
+  const latA = a.lat * radians;
+  const latB = b.lat * radians;
+  const lonDifference = (b.lon - a.lon) * radians;
+  const haversine = Math.sin((latB - latA) / 2) ** 2
+    + Math.cos(latA) * Math.cos(latB) * Math.sin(lonDifference / 2) ** 2;
+  return 2 * 6371008.8 * Math.asin(Math.sqrt(Math.min(1, haversine)));
+}
+
+async function stationCatalog(state, signal) {
+  if (!/^[A-Z]{2}$/.test(state ?? '')) return [];
+  const features = [];
+  let url = `https://api.weather.gov/stations?state=${state}&limit=500`;
+  while (url) {
+    try {
+      const page = await getNws(url, signal);
+      if (!page.features?.length) break;
+      features.push(...page.features);
+      url = page.pagination?.next;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      break;
+    }
+  }
+  return features;
+}
+
+export async function fetchCurrentConditions(point, location, signal) {
+  const nearbyWork = point.observationStations
+    ? getNws(point.observationStations, signal).then(result => result.features ?? []).catch(() => [])
+    : [];
+  const state = point.relativeLocation?.properties?.state;
+  const [nearby, catalog] = await Promise.all([nearbyWork, stationCatalog(state, signal)]);
+  const stations = new Map();
+  for (const feature of [...nearby, ...catalog]) {
+    const station = feature.properties;
+    if (!station?.stationIdentifier) continue;
+    const [lon, lat] = feature.geometry?.coordinates ?? [];
+    const distance = Number.isFinite(lat) && Number.isFinite(lon) ? distanceMeters(location, {lat, lon}) : null;
+    const id = station.stationIdentifier;
+    const existing = stations.get(id);
+    if (!existing || (existing.distance == null && distance != null)) {
+      stations.set(id, {id, name: station.name, distance});
+    }
+  }
+  const nearestFirst = (a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity);
+  const closest = [...stations.values()].sort(nearestFirst).slice(0, 5);
+  const gridFallback = nearby.map(feature => stations.get(feature.properties?.stationIdentifier))
+    .filter(Boolean).sort(nearestFirst).slice(0, 5);
+  const candidates = [...new Set([...closest, ...gridFallback])];
+  for (const station of candidates) {
+    try {
+      const url = `https://api.weather.gov/stations/${encodeURIComponent(station.id)}/observations/latest`;
+      const {properties} = await getNws(url, signal);
+      const observedAt = Date.parse(properties?.timestamp);
+      const age = Date.now() - observedAt;
+      if (!Number.isFinite(age) || age > HOUR || age < -5 * 60000) continue;
+
+      const {temperature: temp, relativeHumidity, windSpeed} = properties;
+      const description = properties.textDescription?.trim();
+      const temperature = Number.isFinite(temp?.value)
+        ? temp.unitCode?.endsWith(':degC') ? temp.value * 1.8 + 32 : temp.value
+        : null;
+      const humidity = Number.isFinite(relativeHumidity?.value) ? relativeHumidity.value : null;
+      let wind = null;
+      if (Number.isFinite(windSpeed?.value)) {
+        if (windSpeed.unitCode?.endsWith(':km_h-1')) wind = windSpeed.value / 1.609344;
+        else if (windSpeed.unitCode?.endsWith(':m_s-1')) wind = windSpeed.value / .44704;
+        else if (windSpeed.unitCode?.endsWith(':mi_h-1')) wind = windSpeed.value;
+      }
+      if (!description && temperature == null && humidity == null && wind == null) continue;
+      return {description, temperature, humidity, wind, observedAt,
+        station: station.name ? `${station.name} (${station.id})` : station.id, distance: station.distance};
+    } catch (error) {
+      if (signal.aborted || error.status === 429) throw error;
+    }
+  }
+  return null;
 }
 
 export function temperatureTurns(values) {

@@ -12,9 +12,9 @@
   <link rel="apple-touch-icon" sizes="180x180" href="icons/weather-grid-180.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin defer></script>
-  <script type="module" src="app.js?v=22"></script>
+  <script type="module" src="app.js?v=25"></script>
 </head>
 <body>
   <header class="site-header">
@@ -47,6 +47,11 @@
           <div><h2 id="place">Local forecast</h2><p id="metadata" class="muted" hidden></p></div>
           <button id="refresh" type="button" hidden>Refresh</button>
         </div>
+        <section id="conditions" aria-labelledby="conditions-heading" aria-live="polite" hidden>
+          <h3 id="conditions-heading">Current conditions</h3>
+          <p id="conditions-values"></p>
+          <p id="conditions-source" class="muted"></p>
+        </section>
         <div id="range" class="range" role="group" aria-label="Forecast length" hidden></div>
         <p id="forecast-status" role="status">Finding your location…</p>
         <div id="chart" hidden>

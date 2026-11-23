@@ -1,4 +1,4 @@
-import {HOUR, FORECAST_HOURS, ACCUMULATIONS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=7';
+import {HOUR, FORECAST_HOURS, ACCUMULATIONS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=10';
 
 const NS = 'http://www.w3.org/2000/svg';
 
