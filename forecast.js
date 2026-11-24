@@ -1,7 +1,7 @@
 export const HOUR = 3600000;
 export const FORECAST_HOURS = 168;
 
-export const SERIES = [
+const GRID_SERIES = [
   ['temperature', 'Temperature', 'temp', 'temperature'],
   ['dewpoint', 'Dewpoint', 'dew', 'temperature', 'dotted'],
   ['heatIndex', 'Heat Index', 'heat', 'temperature', 'dashed'],
@@ -18,6 +18,14 @@ export const ACCUMULATIONS = [
   {key: 'quantitativePrecipitation', label: 'Liquid-equivalent precip.', type: 'rain', color: 'precip'},
   {key: 'snowfallAmount', label: 'Snow accumulation', type: 'snow', shortLabel: 'snow', color: 'dew'},
 ];
+
+const RATE_SERIES = [
+  {key: 'liquidRate', source: 'quantitativePrecipitation', label: 'Liquid-equivalent rate', color: 'precip'},
+  {key: 'snowRate', source: 'snowfallAmount', label: 'Snowfall rate', color: 'dew', style: 'dotted'},
+  {key: 'iceRate', source: 'iceAccumulation', label: 'Ice accretion rate', color: 'heat', style: 'dashed'},
+].map(series => ({...series, panel: 'rate'}));
+
+export const SERIES = [...GRID_SERIES, ...RATE_SERIES];
 
 export const TYPES = [
   ['rain', 'Rain', 'precip', /rain|drizzle|showers/],
@@ -49,7 +57,7 @@ function hourly(field, first, convert = value => value) {
 
 export function buildForecast(properties, now = Date.now()) {
   const first = Math.ceil(now / HOUR) * HOUR;
-  const values = Object.fromEntries(SERIES.map(({key, panel}) => {
+  const values = Object.fromEntries(GRID_SERIES.map(({key, panel}) => {
     const field = properties[key];
     const unit = field?.uom?.split(':').at(-1);
     const converted = hourly(field, first).map(value => {
@@ -76,7 +84,7 @@ export function buildForecast(properties, now = Date.now()) {
       return type.pattern.test(code);
     }));
   }
-  const accumulations = Object.fromEntries(ACCUMULATIONS.map(({key}) => {
+  const accumulations = Object.fromEntries(RATE_SERIES.map(({source: key}) => {
     const field = properties[key];
     const unit = field?.uom?.split(':').at(-1);
     const unitsToInches = {mm: 1 / 25.4, cm: 1 / 2.54, m: 1 / .0254, in: 1};
@@ -86,6 +94,9 @@ export function buildForecast(properties, now = Date.now()) {
         ? {inches: value * factor, hours: duration / HOUR}
         : null)];
   }));
+  for (const {key, source} of RATE_SERIES) {
+    values[key] = accumulations[source].map(amount => amount == null ? null : amount.inches / amount.hours);
+  }
   return {first, values, accumulations, updated: Date.parse(properties.updateTime)};
 }
 

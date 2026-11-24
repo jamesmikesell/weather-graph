@@ -1,4 +1,4 @@
-import {HOUR, FORECAST_HOURS, ACCUMULATIONS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=10';
+import {HOUR, FORECAST_HOURS, ACCUMULATIONS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=11';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -29,6 +29,26 @@ function trimZeroRuns(visible, full, offset) {
   });
 }
 
+function ratePath(values, full, offset, x, y) {
+  let path = '';
+  let previous = null;
+  values.forEach((value, index) => {
+    const inZeroRun = value === 0 && (full[offset + index - 1] === 0 || full[offset + index + 1] === 0);
+    if (inZeroRun) {
+      // Show the zero endpoints of the step without drawing the dry stretch.
+      if (previous > 0) path += `L${x(index)},${y(0)}`;
+      previous = values[index + 1] > 0 ? 0 : null;
+      if (previous === 0) path += `M${x(index + 1)},${y(0)}`;
+      return;
+    }
+    if (value != null) {
+      path += `${previous == null ? 'M' : 'L'}${x(index)},${y(value)}H${x(index + 1)}`;
+    }
+    previous = value;
+  });
+  return path;
+}
+
 function formatInches(inches) {
   return inches > 0 && inches < .01 ? '<0.01' : inches.toFixed(2);
 }
@@ -53,9 +73,9 @@ function accumulationPeriods(amounts, offset, count) {
   return periods;
 }
 
-function axisBounds(values, fromZero = false) {
+function axisBounds(values, fromZero = false, minimumMaximum = 5) {
   const min = fromZero ? 0 : Math.min(...values) - 5;
-  const max = fromZero ? Math.max(5, ...values) : Math.max(...values) + 5;
+  const max = fromZero ? Math.max(minimumMaximum, ...values) : Math.max(...values) + 5;
   const raw = (max - min) / 5;
   const base = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 5, 10].map(n => n * base).find(n => n >= raw);
@@ -88,6 +108,7 @@ export function createChart(plot, legend, tooltip, readout, {hiddenSeries = [], 
       .map(([key, series]) => [key, series.slice(offset, offset + count)]));
     const lineValues = Object.fromEntries(SERIES.map(({key, panel}) => {
       const full = current.values[key];
+      if (panel === 'rate') return [key, trimZeroRuns(values[key], full, offset)];
       const visible = values[key].slice();
       const lastHour = visible.at(-1);
       // Hourly values cover the interval up to the next hour boundary.
@@ -172,15 +193,18 @@ export function createChart(plot, legend, tooltip, readout, {hiddenSeries = [], 
       ['temperature', 'Temperature (°F)', compact ? 235 : 302, 32],
       ['probability', 'Probability (%)', compact ? 205 : 264, 16],
       ['category', null, typeHeight, 16],
+      ['rate', 'Avg. precip rate (in/h)', compact ? 132 : 156, 16],
       ['wind', 'Wind (mph)', 118, 0],
     ]) {
       const series = visibleSeries.filter(item => item.panel === key);
       if (key === 'category' ? !height : !series.length) continue;
       const numbers = series.flatMap(item => lineValues[item.key].filter(Number.isFinite));
+      if (key === 'rate' && !series.some(item => values[item.key].some(Number.isFinite))) continue;
       const bounds = {
         temperature: () => numbers.length ? axisBounds(numbers) : [0, 100, 25],
         probability: () => [0, 100, 25],
         wind: () => axisBounds(numbers, true),
+        rate: () => axisBounds(numbers, true, .05),
       }[key]?.();
       panels[key] = {top, height, label, bounds};
       bottom = top + height;
@@ -234,21 +258,26 @@ export function createChart(plot, legend, tooltip, readout, {hiddenSeries = [], 
       if (!bounds) continue;
       const [min, max, step] = bounds;
       panel.y = value => end - (value - min) / (max - min) * height;
-      for (let value = min; value <= max; value += step) {
+      for (let i = 0; i <= Math.round((max - min) / step); i++) {
+        const value = min + i * step;
         const y = panel.y(value);
         line(root, left, y, right, y);
-        svg(root, 'text', {x: left - 5, y, 'text-anchor': 'end', 'dominant-baseline': 'central'}, value);
+        svg(root, 'text', {x: left - 5, y, 'text-anchor': 'end', 'dominant-baseline': 'central'}, Number(value.toPrecision(8)));
       }
       svg(root, 'text', {transform: `translate(12 ${top + height / 2}) rotate(-90)`, 'text-anchor': 'middle', class: 'axis-label'}, label);
     }
 
     for (const series of visibleSeries) {
-      const {y} = panels[series.panel];
+      const panel = panels[series.panel];
+      if (!panel) continue;
+      const {y} = panel;
       let previous = null;
       let path = '';
       const percentage = series.panel === 'probability';
       const visible = lineValues[series.key];
-      visible.forEach((value, index) => {
+      if (series.panel === 'rate') {
+        path = ratePath(visible, current.values[series.key], offset, x, y);
+      } else visible.forEach((value, index) => {
         if (value != null) {
           const connectsBefore = previous != null && !(percentage && previous === 0 && value === 0);
           const next = visible[index + 1];
@@ -355,8 +384,10 @@ export function createChart(plot, legend, tooltip, readout, {hiddenSeries = [], 
       const value = current.values[series.key][offset + inspection];
       const category = series.style === 'category';
       if (category ? !value : value == null) continue;
-      const unit = {temperature: ' °F', wind: ' mph', probability: '%'}[series.panel];
-      const line = category ? series.label : `${series.label}: ${Math.round(value)}${unit}`;
+      const unit = {temperature: ' °F', wind: ' mph', probability: '%', rate: ' in/h'}[series.panel];
+      const displayed = series.panel === 'rate' && value != null
+        ? (value > 0 && value < .001 ? '<0.001' : Number(value.toFixed(3))) : Math.round(value);
+      const line = category ? series.label : `${series.label}: ${displayed}${unit}`;
       const row = document.createElement('div');
       row.append(createSwatch(series), line);
       lines.push(line);

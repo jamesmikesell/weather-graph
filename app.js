@@ -1,5 +1,5 @@
-import {distanceMeters, fetchPoint, fetchForecast, fetchCurrentConditions} from './forecast.js?v=10';
-import {createChart} from './chart.js?v=21';
+import {distanceMeters, fetchPoint, fetchForecast, fetchCurrentConditions} from './forecast.js?v=11';
+import {createChart} from './chart.js?v=23';
 import {addRadar} from './radar.js?v=3';
 
 const byId = id => document.getElementById(id);
