@@ -1,5 +1,6 @@
 import {distanceMeters, fetchPoint, fetchForecast, fetchCurrentConditions} from './forecast.js?v=10';
 import {createChart} from './chart.js?v=16';
+import {addRadar} from './radar.js?v=2';
 
 const byId = id => document.getElementById(id);
 const theme = byId('theme');
@@ -32,6 +33,7 @@ const range = byId('range');
 const chart = byId('chart');
 const draw = createChart(byId('plot'), byId('legend'), byId('tooltip'), byId('chart-readout'));
 const LOCATION_RADIUS_METERS = 1609.344;
+const REGIONAL_ZOOM = 7;
 
 const {L} = window;
 let map;
@@ -79,6 +81,8 @@ if (L) {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
+  const radarControls = byId('radar-controls');
+  if (radarControls) addRadar(L, map, locationPanel, radarControls, byId('radar-playback'), byId('radar-time'));
   map.on('click', ({latlng}) => choosePoint(latlng.wrap(), {fromMap: true}));
   const centerButton = byId('map-center');
   centerButton.hidden = false;
@@ -106,13 +110,14 @@ function choosePoint(point, {fromMap = false, source = 'manual'} = {}) {
   if (source === 'manual') stopAutomaticLocation();
   showLocationStatus();
   closeSuggestions();
+  const firstSelection = !selection;
   selection = {lat: point.lat, lon: point.lon ?? point.lng, name: point.name, source};
   if (map) {
     const position = [selection.lat, selection.lon];
     if (!marker) marker = L.circleMarker(position, {radius: 6, color: '#fff', weight: 2, fillColor: '#247fd0', fillOpacity: 1, interactive: false}).addTo(map);
     else marker.setLatLng(position);
-    if (fromMap) map.panTo(position);
-    else if (map.getZoom() > 3 || !map.getBounds().contains(position)) map.setView(position, Math.max(4, map.getZoom()));
+    if (fromMap && !firstSelection) map.panTo(position);
+    else map.setView(position, Math.max(REGIONAL_ZOOM, map.getZoom()), {animate: false});
   }
   loadForecast();
 }

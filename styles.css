@@ -60,6 +60,10 @@ h3 { margin: 20px 0 8px; font-size: .95rem; }
 #map { isolation: isolate; height: 225px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--plot); }
 #map.leaflet-container { cursor: crosshair; }
 #map.dark-map .leaflet-tile-pane { filter: invert(.87) hue-rotate(180deg) saturate(.65); }
+#radar-controls { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-top: 7px; font-size: .875rem; }
+.radar-source a { color: var(--accent); }
+#radar-time { display: block; color: var(--muted); font-size: .8rem; }
+#radar-playback { flex-shrink: 0; font-size: .8rem; }
 .map-center { margin-top: 8px; font-size: .875rem; }
 .muted { margin: 7px 0 0; color: var(--muted); font-size: .875rem; }
 .forecast-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
