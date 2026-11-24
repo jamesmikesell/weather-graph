@@ -74,6 +74,8 @@ body:has(#map-dialog[open]) { overflow: hidden; }
 #map-dialog #map { height: 100%; }
 #map { isolation: isolate; height: 225px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--plot); }
 #map.leaflet-container { cursor: crosshair; }
+#map .leaflet-control-attribution { font-size: .5rem; color: var(--text); background: var(--card); }
+#map .leaflet-control-attribution a { color: var(--accent); }
 #map.dark-map .leaflet-tile-pane { filter: invert(.87) hue-rotate(180deg) saturate(.65); }
 #radar-controls { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-top: 7px; font-size: .875rem; }
 .radar-source a { color: var(--accent); }

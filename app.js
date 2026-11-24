@@ -147,9 +147,10 @@ if (L) {
     if (matches) map.scrollWheelZoom.enable();
     else map.scrollWheelZoom.disable();
   });
+  map.attributionControl.setPrefix(false);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   const dialog = byId('map-dialog');
   setupExpandedMap(dialog);
