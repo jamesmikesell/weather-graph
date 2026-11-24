@@ -84,9 +84,6 @@ if (L) {
   const radarControls = byId('radar-controls');
   if (radarControls) addRadar(L, map, locationPanel, radarControls, byId('radar-playback'), byId('radar-time'));
   map.on('click', ({latlng}) => choosePoint(latlng.wrap(), {fromMap: true}));
-  const centerButton = byId('map-center');
-  centerButton.hidden = false;
-  centerButton.addEventListener('click', () => choosePoint(map.getCenter().wrap(), {fromMap: true}));
 } else {
   byId('map').textContent = 'The map could not load. City search and device location are available.';
 }
