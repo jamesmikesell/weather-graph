@@ -137,6 +137,7 @@ if (L) {
   const wheelInput = matchMedia('(hover: hover) and (pointer: fine)');
   map = L.map('map', {
     scrollWheelZoom: wheelInput.matches,
+    zoomControl: false,
     wheelPxPerZoomLevel: 120,
     zoomSnap: .5,
     worldCopyJump: true,
