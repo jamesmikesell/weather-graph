@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Weather Grid",
-  "short_name": "Weather Grid",
-  "description": "Seven days of National Weather Service grid forecasts.",
+  "name": "Graph WX",
+  "short_name": "Graph WX",
+  "description": "Just the weather. Just graphs.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

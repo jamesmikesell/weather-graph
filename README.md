@@ -1,7 +1,7 @@
-# Weather Grid
+# Graph WX
 
 View at:
-<https://jamesmikesell.github.io/weather-graph/>
+<https://graphwx.com>
 
 A static, forecast-only National Weather Service meteogram. The browser queries the NWS point lookup and grid forecast directly. City autocomplete uses the 2025 Census Gazetteer Places and County Subdivisions files. The index includes 35,635 entries with Census functional status A or B, meaning they have officials providing primary general-purpose local government services. It covers active incorporated places and governing county subdivisions, including New England towns and townships. County names distinguish same-named subdivisions in the same state. Census-designated places and subdivisions administered by another government are excluded.
 
@@ -18,7 +18,7 @@ The browser calls [GeoJS](https://www.geojs.io/docs/v1/endpoints/geo/) directly 
 
 ## Install on your phone
 
-Open the HTTPS-hosted app in your phone's browser. The installed app launches from the Weather Grid icon in its own window.
+Open the HTTPS-hosted app in your phone's browser. The installed app launches from the Graph WX icon in its own window.
 
 - iOS Safari — Share → Add to Home Screen → turn on Open as Web App if shown → Add.
 - Android Chrome — Menu → Install app or Add to Home screen → Install.
