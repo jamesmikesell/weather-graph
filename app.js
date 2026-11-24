@@ -134,8 +134,18 @@ function setupExpandedMap(dialog) {
 }
 
 if (L) {
-  map = L.map('map', {scrollWheelZoom: false, worldCopyJump: true, minZoom: 2})
-    .setView([38, -97], 2);
+  const wheelInput = matchMedia('(hover: hover) and (pointer: fine)');
+  map = L.map('map', {
+    scrollWheelZoom: wheelInput.matches,
+    wheelPxPerZoomLevel: 120,
+    zoomSnap: .5,
+    worldCopyJump: true,
+    minZoom: 2,
+  }).setView([38, -97], 2);
+  wheelInput.addEventListener('change', ({matches}) => {
+    if (matches) map.scrollWheelZoom.enable();
+    else map.scrollWheelZoom.disable();
+  });
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
