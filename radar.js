@@ -55,7 +55,7 @@ function frameImage(url, signal) {
   });
 }
 
-export function addRadar(L, map, panel, controls, toggle, timestamp) {
+export function addRadar(L, map, panel, controls, toggle, timestamp, dialog) {
   let playing = !matchMedia('(prefers-reduced-motion: reduce)').matches;
   let frames = [];
   let shown = -1;
@@ -65,7 +65,7 @@ export function addRadar(L, map, panel, controls, toggle, timestamp) {
   const timeFormat = new Intl.DateTimeFormat('en-US', {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   });
-  const visible = () => panel.open && !document.hidden;
+  const visible = () => (panel.open || dialog?.open) && !document.hidden;
   controls.hidden = false;
 
   function show(index) {

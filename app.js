@@ -1,6 +1,6 @@
 import {distanceMeters, fetchPoint, fetchForecast, fetchCurrentConditions} from './forecast.js?v=10';
 import {createChart} from './chart.js?v=18';
-import {addRadar} from './radar.js?v=2';
+import {addRadar} from './radar.js?v=3';
 
 const byId = id => document.getElementById(id);
 const theme = byId('theme');
@@ -74,6 +74,40 @@ function coordinates({lat, lon}) {
   return `${Math.abs(lat).toFixed(2)}°${lat < 0 ? 'S' : 'N'}, ${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}`;
 }
 
+function setupExpandedMap(dialog) {
+  const home = byId('map-home');
+  const view = byId('map-view');
+  const button = byId('expand-map');
+  if (!dialog?.showModal || !home || !view || !button) return;
+
+  function updateButton(expanded) {
+    const label = expanded ? 'Exit expanded map' : 'Expand map';
+    button.setAttribute('aria-expanded', String(expanded));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
+
+  button.hidden = false;
+  button.addEventListener('click', () => {
+    if (dialog.open) {
+      dialog.close();
+      return;
+    }
+    dialog.append(view);
+    updateButton(true);
+    dialog.showModal();
+    button.focus({preventScroll: true});
+    map.invalidateSize();
+  });
+  dialog.addEventListener('close', () => {
+    locationPanel.open = true;
+    home.append(view);
+    updateButton(false);
+    button.focus({preventScroll: true});
+    map.invalidateSize();
+  });
+}
+
 if (L) {
   map = L.map('map', {scrollWheelZoom: false, worldCopyJump: true, minZoom: 2})
     .setView([38, -97], 2);
@@ -81,8 +115,10 @@ if (L) {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
+  const dialog = byId('map-dialog');
+  setupExpandedMap(dialog);
   const radarControls = byId('radar-controls');
-  if (radarControls) addRadar(L, map, locationPanel, radarControls, byId('radar-playback'), byId('radar-time'));
+  if (radarControls) addRadar(L, map, locationPanel, radarControls, byId('radar-playback'), byId('radar-time'), dialog);
   map.on('click', ({latlng}) => choosePoint(latlng.wrap(), {fromMap: true}));
 } else {
   byId('map').textContent = 'The map could not load. City search and device location are available.';
