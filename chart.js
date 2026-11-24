@@ -62,8 +62,8 @@ function axisBounds(values, fromZero = false) {
   return [Math.floor(min / step) * step, Math.ceil(max / step) * step, step];
 }
 
-export function createChart(plot, legend, tooltip, readout) {
-  const hidden = new Set();
+export function createChart(plot, legend, tooltip, readout, {hiddenSeries = [], onVisibilityChange} = {}) {
+  const hidden = new Set([...SERIES, ...TYPES].map(series => series.key).filter(key => hiddenSeries.includes(key)));
   let current;
   let days;
   let offset = 0;
@@ -104,17 +104,14 @@ export function createChart(plot, legend, tooltip, readout) {
     const timeFormat = new Intl.DateTimeFormat('en-US', {
       timeZone: zone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', timeZoneName: 'short',
     });
-    const activeTypes = TYPES.filter(type => values[type.key].some(Boolean));
-    const panels = {
-      temperature: {top: 4, height: width < 450 ? 235 : 302, label: 'Temperature (°F)'},
-      probability: {top: width < 450 ? 271 : 338, height: width < 450 ? 205 : 264, label: 'Probability (%)'},
-    };
-    const probabilityEnd = panels.probability.top + panels.probability.height;
+    const activeTypes = TYPES.filter(type => !hidden.has(type.key) && values[type.key].some(Boolean));
+    const visibleSeries = SERIES.filter(series => !hidden.has(series.key));
     // Keep the current plot in place while measuring labels for the next frame.
     const root = svg(plot, 'svg', {'aria-hidden': 'true', 'data-pending': ''});
     const pendingLabels = svg(root, 'g', {});
     const amountRows = new Map();
     for (const {key, type, shortLabel, color} of ACCUMULATIONS) {
+      if (hidden.has(type)) continue;
       const labels = [];
       const laneEnds = [];
       const groups = [];
@@ -167,17 +164,30 @@ export function createChart(plot, legend, tooltip, readout) {
         typeHeight += amounts.height;
       }
     }
-    if (typeHeight) panels.category = {top: probabilityEnd + 15, height: typeHeight};
-    panels.wind = {top: probabilityEnd + (typeHeight ? typeHeight + 30 : 16), height: 118, label: 'Wind (mph)'};
-    const bottom = panels.wind.top + panels.wind.height;
+    const panels = {};
+    const compact = width < 450;
+    let top = 4;
+    let bottom = 0;
+    for (const [key, label, height, gap] of [
+      ['temperature', 'Temperature (°F)', compact ? 235 : 302, 32],
+      ['probability', 'Probability (%)', compact ? 205 : 264, 16],
+      ['category', null, typeHeight, 16],
+      ['wind', 'Wind (mph)', 118, 0],
+    ]) {
+      const series = visibleSeries.filter(item => item.panel === key);
+      if (key === 'category' ? !height : !series.length) continue;
+      const numbers = series.flatMap(item => lineValues[item.key].filter(Number.isFinite));
+      const bounds = {
+        temperature: () => numbers.length ? axisBounds(numbers) : [0, 100, 25],
+        probability: () => [0, 100, 25],
+        wind: () => axisBounds(numbers, true),
+      }[key]?.();
+      panels[key] = {top, height, label, bounds};
+      bottom = top + height;
+      top = bottom + gap;
+    }
+    const lastPanel = Object.keys(panels).at(-1);
     root.setAttribute('viewBox', `0 0 ${width} ${bottom + 54}`);
-    const temps = SERIES.filter(s => s.panel === 'temperature')
-      .flatMap(s => lineValues[s.key].filter(Number.isFinite));
-    const winds = SERIES.filter(s => s.panel === 'wind')
-      .flatMap(s => lineValues[s.key].filter(Number.isFinite));
-    panels.temperature.bounds = temps.length ? axisBounds(temps) : [0, 100, 25];
-    panels.probability.bounds = [0, 100, 25];
-    panels.wind.bounds = axisBounds(winds, true);
 
     const ticks = [];
     for (let i = 0; i < count; i++) {
@@ -214,7 +224,7 @@ export function createChart(plot, legend, tooltip, readout) {
         svg(root, 'rect', {x: x(a), y: top, width: x(b) - x(a), height, fill: 'var(--night)'});
       }
       for (const {i} of ticks) line(root, x(i), top, x(i), end);
-      if (key === 'temperature' || key === 'wind') {
+      if (key === 'temperature' || key === lastPanel) {
         for (const {i, label: tick} of ticks) {
           const position = x(i);
           const anchor = position < left + 14 ? 'start' : position > right - 14 ? 'end' : 'middle';
@@ -232,8 +242,7 @@ export function createChart(plot, legend, tooltip, readout) {
       svg(root, 'text', {transform: `translate(12 ${top + height / 2}) rotate(-90)`, 'text-anchor': 'middle', class: 'axis-label'}, label);
     }
 
-    for (const series of SERIES) {
-      if (hidden.has(series.key)) continue;
+    for (const series of visibleSeries) {
       const {y} = panels[series.panel];
       let previous = null;
       let path = '';
@@ -277,7 +286,6 @@ export function createChart(plot, legend, tooltip, readout) {
       const y = panels.category.top + typeRows.get(type.key) + 13;
       const label = type.key === 'freezingRain' ? 'Fz Rain' : type.label;
       svg(root, 'text', {x: left - 3, y, 'text-anchor': 'end', 'dominant-baseline': 'central'}, label);
-      if (hidden.has(type.key)) return;
       let start = null;
       for (let i = 0; i <= count; i++) {
         if (i < count && values[type.key][i]) {
@@ -304,13 +312,19 @@ export function createChart(plot, legend, tooltip, readout) {
       const guide = line(cursor, 0, panel.top, 0, panel.top + panel.height, 'var(--muted)');
       guide.setAttribute('stroke-dasharray', '3 4');
     }
-    plot.replaceChildren(root);
-    root.removeAttribute('data-pending');
-    metrics = {left, right, x, count, cursor, bottom, timeFormat, activeTypes, width};
+    if (lastPanel) {
+      plot.replaceChildren(root);
+      root.removeAttribute('data-pending');
+      metrics = {left, right, x, count, cursor, bottom, timeFormat, activeTypes, width};
+    } else {
+      plot.replaceChildren();
+      metrics = null;
+    }
+    plot.tabIndex = lastPanel ? 0 : -1;
 
     const previousFocus = document.activeElement?.dataset.series;
     legend.replaceChildren();
-    for (const series of [...SERIES, ...activeTypes]) {
+    for (const series of [...SERIES, ...TYPES]) {
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.series = series.key;
@@ -318,6 +332,7 @@ export function createChart(plot, legend, tooltip, readout) {
       button.append(createSwatch(series), series.label);
       button.addEventListener('click', () => {
         if (!hidden.delete(series.key)) hidden.add(series.key);
+        onVisibilityChange?.([...hidden]);
         render();
       });
       legend.append(button);
@@ -347,7 +362,8 @@ export function createChart(plot, legend, tooltip, readout) {
       lines.push(line);
       rows.push(row);
     }
-    for (const {key, label} of ACCUMULATIONS) {
+    for (const {key, label, type} of ACCUMULATIONS) {
+      if (hidden.has(type)) continue;
       const amount = current.accumulations[key][offset + inspection];
       if (key === 'snowfallAmount' && !(amount?.inches > 0)) continue;
       const detail = amount == null ? 'Unavailable'

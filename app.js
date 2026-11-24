@@ -1,5 +1,5 @@
 import {distanceMeters, fetchPoint, fetchForecast, fetchCurrentConditions} from './forecast.js?v=10';
-import {createChart} from './chart.js?v=18';
+import {createChart} from './chart.js?v=21';
 import {addRadar} from './radar.js?v=3';
 
 const byId = id => document.getElementById(id);
@@ -31,7 +31,33 @@ const conditionsSource = byId('conditions-source');
 const refresh = byId('refresh');
 const range = byId('range');
 const chart = byId('chart');
-const draw = createChart(byId('plot'), byId('legend'), byId('tooltip'), byId('chart-readout'));
+const graphStorageKey = 'weather-grid-graph';
+let savedGraph;
+try {
+  savedGraph = JSON.parse(localStorage.getItem(graphStorageKey));
+} catch {
+  // Graph controls still work when preferences cannot be read.
+}
+
+let days = Number.isInteger(savedGraph?.days) && savedGraph.days >= 1 && savedGraph.days <= 7
+  ? savedGraph.days : 7;
+let hiddenSeries = Array.isArray(savedGraph?.hiddenSeries) ? savedGraph.hiddenSeries : [];
+
+function saveGraph() {
+  try {
+    localStorage.setItem(graphStorageKey, JSON.stringify({days, hiddenSeries}));
+  } catch {
+    // Graph controls still work when preferences cannot be saved.
+  }
+}
+
+const draw = createChart(byId('plot'), byId('legend'), byId('tooltip'), byId('chart-readout'), {
+  hiddenSeries,
+  onVisibilityChange(keys) {
+    hiddenSeries = keys;
+    saveGraph();
+  },
+});
 const LOCATION_RADIUS_METERS = 1609.344;
 const REGIONAL_ZOOM = 7;
 
@@ -43,7 +69,6 @@ let forecast;
 let request;
 let automaticLocation;
 let locationPermission;
-let days = 7;
 
 function applyTheme() {
   const appearance = theme.value;
@@ -133,6 +158,7 @@ for (let length = 1; length <= 7; length++) {
   button.setAttribute('aria-pressed', String(days === length));
   button.addEventListener('click', () => {
     days = length;
+    saveGraph();
     for (const item of range.children) item.setAttribute('aria-pressed', String(item === button));
     if (forecast) draw(forecast, days);
   });
