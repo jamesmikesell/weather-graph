@@ -80,13 +80,20 @@ export function createChart(plot, legend, tooltip, readout) {
   function render() {
     if (!current || !plot.clientWidth) return;
     clearInspection();
-    plot.replaceChildren();
 
     const {point, lat, lon} = current;
     const count = days * 24;
     const first = current.first + offset * HOUR;
     const values = Object.fromEntries(Object.entries(current.values)
       .map(([key, series]) => [key, series.slice(offset, offset + count)]));
+    const lineValues = Object.fromEntries(SERIES.map(({key, panel}) => {
+      const full = current.values[key];
+      const visible = values[key].slice();
+      const lastHour = visible.at(-1);
+      // Hourly values cover the interval up to the next hour boundary.
+      visible.push(lastHour == null ? null : full[offset + count] ?? lastHour);
+      return [key, panel === 'probability' ? trimZeroRuns(visible, full, offset) : visible];
+    }));
     const width = plot.clientWidth;
     const left = width < 450 ? 44 : 63;
     const right = width - 10;
@@ -103,7 +110,8 @@ export function createChart(plot, legend, tooltip, readout) {
       probability: {top: width < 450 ? 271 : 338, height: width < 450 ? 205 : 264, label: 'Probability (%)'},
     };
     const probabilityEnd = panels.probability.top + panels.probability.height;
-    const root = svg(plot, 'svg', {'aria-hidden': 'true'});
+    // Keep the current plot in place while measuring labels for the next frame.
+    const root = svg(plot, 'svg', {'aria-hidden': 'true', 'data-pending': ''});
     const pendingLabels = svg(root, 'g', {});
     const amountRows = new Map();
     for (const {key, type, shortLabel, color} of ACCUMULATIONS) {
@@ -164,9 +172,9 @@ export function createChart(plot, legend, tooltip, readout) {
     const bottom = panels.wind.top + panels.wind.height;
     root.setAttribute('viewBox', `0 0 ${width} ${bottom + 54}`);
     const temps = SERIES.filter(s => s.panel === 'temperature')
-      .flatMap(s => values[s.key].filter(Number.isFinite));
+      .flatMap(s => lineValues[s.key].filter(Number.isFinite));
     const winds = SERIES.filter(s => s.panel === 'wind')
-      .flatMap(s => values[s.key].filter(Number.isFinite));
+      .flatMap(s => lineValues[s.key].filter(Number.isFinite));
     panels.temperature.bounds = temps.length ? axisBounds(temps) : [0, 100, 25];
     panels.probability.bounds = [0, 100, 25];
     panels.wind.bounds = axisBounds(winds, true);
@@ -230,9 +238,7 @@ export function createChart(plot, legend, tooltip, readout) {
       let previous = null;
       let path = '';
       const percentage = series.panel === 'probability';
-      const visible = percentage
-        ? trimZeroRuns(values[series.key], current.values[series.key], offset)
-        : values[series.key];
+      const visible = lineValues[series.key];
       visible.forEach((value, index) => {
         if (value != null) {
           const connectsBefore = previous != null && !(percentage && previous === 0 && value === 0);
@@ -298,6 +304,8 @@ export function createChart(plot, legend, tooltip, readout) {
       const guide = line(cursor, 0, panel.top, 0, panel.top + panel.height, 'var(--muted)');
       guide.setAttribute('stroke-dasharray', '3 4');
     }
+    plot.replaceChildren(root);
+    root.removeAttribute('data-pending');
     metrics = {left, right, x, count, cursor, bottom, timeFormat, activeTypes, width};
 
     const previousFocus = document.activeElement?.dataset.series;

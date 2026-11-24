@@ -78,7 +78,8 @@ h3 { margin: 20px 0 8px; font-size: .95rem; }
 .range button[aria-pressed="true"] { font-weight: 700; border-color: var(--accent); }
 #chart { position: relative; }
 #plot svg { width: 100%; display: block; overflow: visible; }
-#plot { touch-action: pan-y; }
+#plot { position: relative; touch-action: pan-y; }
+#plot svg[data-pending] { position: absolute; inset: 0 auto auto 0; visibility: hidden; }
 #plot.pannable { cursor: grab; user-select: none; }
 #plot.dragging { cursor: grabbing; }
 #plot text { font-size: 12px; fill: var(--muted); }
