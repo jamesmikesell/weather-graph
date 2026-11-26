@@ -350,23 +350,24 @@ export function createChart(plot, legend, tooltip, readout, {hiddenSeries = [], 
       metrics = null;
     }
     plot.tabIndex = lastPanel ? 0 : -1;
+  }
 
-    const previousFocus = document.activeElement?.dataset.series;
-    legend.replaceChildren();
-    for (const series of [...SERIES, ...TYPES]) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.dataset.series = series.key;
+  for (const series of [...SERIES, ...TYPES]) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.series = series.key;
+    button.setAttribute('aria-pressed', String(!hidden.has(series.key)));
+    button.append(createSwatch(series), series.label);
+    button.addEventListener('click', () => {
+      const top = button.getBoundingClientRect().top;
+      if (!hidden.delete(series.key)) hidden.add(series.key);
       button.setAttribute('aria-pressed', String(!hidden.has(series.key)));
-      button.append(createSwatch(series), series.label);
-      button.addEventListener('click', () => {
-        if (!hidden.delete(series.key)) hidden.add(series.key);
-        onVisibilityChange?.([...hidden]);
-        render();
-      });
-      legend.append(button);
-      if (series.key === previousFocus) button.focus({preventScroll: true});
-    }
+      onVisibilityChange?.([...hidden]);
+      render();
+      const shift = button.getBoundingClientRect().top - top;
+      if (shift) window.scrollBy({top: shift, behavior: 'instant'});
+    });
+    legend.append(button);
   }
 
   function inspect(index, offsetY, announce = false) {
