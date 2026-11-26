@@ -33,10 +33,9 @@ body { margin: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) e
 .wrap { width: min(1320px, calc(100% - 48px)); margin-inline: auto; }
 .site-header { background: var(--card); border-bottom: 1px solid var(--border); }
 .header-inner { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.brand, .theme { display: flex; align-items: center; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; }
 .brand { font-weight: 750; white-space: nowrap; }
 .brand-mark { display: block; border-radius: 8px; }
-.theme { color: var(--muted); font-size: .875rem; }
 button, select, input { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 7px; }
 button, select { padding: .44rem .68rem; cursor: pointer; }
 select { appearance: none; padding-right: 1.75rem; background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%238292a5' stroke-width='1.5'/%3E%3C/svg%3E") right .55rem center / .65rem no-repeat; }
