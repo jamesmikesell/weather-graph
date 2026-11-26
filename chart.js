@@ -1,4 +1,4 @@
-import {HOUR, FORECAST_HOURS, ACCUMULATIONS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=11';
+import {HOUR, FORECAST_HOURS, ACCUMULATIONS, SERIES, TYPES, isNight, temperatureTurns} from './forecast.js?v=12';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -494,9 +494,13 @@ export function createChart(plot, legend, tooltip, readout, {hiddenSeries = [], 
   new ResizeObserver(() => {
     if (plot.clientWidth !== metrics?.width) render();
   }).observe(plot);
-  return (forecast, length) => {
+  return (forecast, length, {preserveView = false} = {}) => {
     if (drag) endDrag({pointerId: drag.id});
-    if (current !== forecast) offset = 0;
+    if (current !== forecast) {
+      offset = preserveView && current && offset > 0
+        ? offset + (current.first - forecast.first) / HOUR
+        : 0;
+    }
     current = forecast;
     days = length;
     offset = clampOffset(offset);

@@ -1,5 +1,5 @@
-import {distanceMeters, fetchPoint, fetchForecast, fetchCurrentConditions} from './forecast.js?v=11';
-import {createChart} from './chart.js?v=23';
+import {HOUR, buildForecast, distanceMeters, fetchPoint, fetchForecast, fetchCurrentConditions} from './forecast.js?v=12';
+import {createChart} from './chart.js?v=24';
 import {addRadar} from './radar.js?v=3';
 
 const byId = id => document.getElementById(id);
@@ -67,6 +67,8 @@ let marker;
 let selection;
 let forecast;
 let request;
+let forecastTimer;
+let lastForecastCheck;
 let automaticLocation;
 let locationPermission;
 
@@ -218,39 +220,59 @@ function showConditions(observation, timeZone) {
     `Observed ${time}`].filter(Boolean).join(' · ');
 }
 
-async function loadForecast() {
+function updateForecastClock() {
+  clearTimeout(forecastTimer);
+  const now = Date.now();
+  const hour = Math.floor(now / HOUR) * HOUR;
+  forecastTimer = setTimeout(updateForecastClock, hour + HOUR - now);
+  if (forecast && forecast.first !== hour) {
+    forecast = {...forecast, ...buildForecast(forecast.properties, now)};
+    draw(forecast, days, {preserveView: true});
+  }
+  if (!document.hidden && selection && !refresh.disabled && lastForecastCheck !== hour) {
+    loadForecast({automatic: true});
+  }
+}
+
+async function loadForecast({automatic = false, preserveView = automatic} = {}) {
+  lastForecastCheck = Math.floor(Date.now() / HOUR) * HOUR;
   request?.abort();
   const controller = new AbortController();
   request = controller;
   const selected = selection;
   const timeout = setTimeout(() => controller.abort('timeout'), 20000);
-  forecast = null;
+  const keepVisible = preserveView && Boolean(forecast);
   const locationCoordinates = selected.source === 'manual' ? coordinates(selected) : '';
   const locationDetail = selected.source === 'ip' ? 'Approximate location from IP' : locationCoordinates;
   const defaultLabel = locationCoordinates || 'Current location';
-  place.textContent = selected.name || defaultLabel;
-  status.textContent = 'Loading the NWS grid forecast…';
-  status.hidden = false;
-  metadata.textContent = locationDetail;
-  metadata.hidden = !locationDetail;
-  chart.hidden = range.hidden = true;
+  if (!keepVisible) {
+    forecast = null;
+    place.textContent = selected.name || defaultLabel;
+    status.textContent = 'Loading the NWS grid forecast…';
+    status.hidden = false;
+    metadata.textContent = locationDetail;
+    metadata.hidden = !locationDetail;
+    chart.hidden = range.hidden = true;
+    conditions.hidden = true;
+  }
   refresh.hidden = false;
   refresh.disabled = true;
-  conditions.hidden = true;
   let observationWork;
   try {
-    const point = await fetchPoint(selected.lat, selected.lon, controller.signal);
+    const point = automatic && keepVisible ? forecast.point : await fetchPoint(selected.lat, selected.lon, controller.signal);
     if (request !== controller) return;
-    conditions.hidden = false;
-    conditionsValues.textContent = '';
-    conditionsSource.textContent = 'Looking up nearby station observations…';
-    observationWork = fetchCurrentConditions(point, selected, controller.signal)
-      .then(observation => {
-        if (request === controller) showConditions(observation, point.timeZone || 'UTC');
-      })
-      .catch(() => {
-        if (request === controller) showConditions(null);
-      });
+    if (!automatic || !keepVisible) {
+      conditions.hidden = false;
+      conditionsValues.textContent = '';
+      conditionsSource.textContent = 'Looking up nearby station observations…';
+      observationWork = fetchCurrentConditions(point, selected, controller.signal)
+        .then(observation => {
+          if (request === controller) showConditions(observation, point.timeZone || 'UTC');
+        })
+        .catch(() => {
+          if (request === controller) showConditions(null);
+        });
+    }
     const result = await fetchForecast(point, selected.lat, selected.lon, controller.signal);
     if (request !== controller) return;
     forecast = result;
@@ -264,14 +286,18 @@ async function loadForecast() {
     metadata.hidden = !metadata.textContent;
     status.hidden = true;
     chart.hidden = range.hidden = false;
-    draw(result, days);
+    draw(result, days, {preserveView: keepVisible});
   } catch (error) {
-    if (request !== controller) return;
+    if (request !== controller || (automatic && keepVisible)) return;
+    status.hidden = false;
     if (error.status === 404) status.textContent = 'NWS has no forecast grid here. Try a point on land within the United States.';
     else if (controller.signal.reason === 'timeout') status.textContent = 'The NWS request timed out. Select Refresh to try again.';
     else status.textContent = 'Could not load the NWS forecast. Select Refresh to try again or choose another location.';
   } finally {
-    if (request === controller) refresh.disabled = false;
+    if (request === controller) {
+      refresh.disabled = false;
+      if (lastForecastCheck !== Math.floor(Date.now() / HOUR) * HOUR) updateForecastClock();
+    }
     await observationWork;
     clearTimeout(timeout);
   }
@@ -368,7 +394,9 @@ navigator.permissions?.query({name: 'geolocation'}).then(permission => {
 }).catch(() => {});
 
 locate.addEventListener('click', useLocation);
-refresh.addEventListener('click', loadForecast);
+refresh.addEventListener('click', () => loadForecast({preserveView: true}));
+document.addEventListener('visibilitychange', updateForecastClock);
+updateForecastClock();
 
 const stateNames = Object.fromEntries(
   'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA PR RI SC SD TN TX UT VT VA WA WV WI WY'

@@ -56,7 +56,7 @@ function hourly(field, first, convert = value => value) {
 }
 
 export function buildForecast(properties, now = Date.now()) {
-  const first = Math.ceil(now / HOUR) * HOUR;
+  const first = Math.floor(now / HOUR) * HOUR;
   const values = Object.fromEntries(GRID_SERIES.map(({key, panel}) => {
     const field = properties[key];
     const unit = field?.uom?.split(':').at(-1);
@@ -100,8 +100,8 @@ export function buildForecast(properties, now = Date.now()) {
   return {first, values, accumulations, updated: Date.parse(properties.updateTime)};
 }
 
-async function getNws(url, signal) {
-  const response = await fetch(url, {headers: {Accept: 'application/geo+json'}, signal});
+async function getNws(url, signal, cache = 'default') {
+  const response = await fetch(url, {headers: {Accept: 'application/geo+json'}, signal, cache});
   if (!response.ok) {
     const error = new Error(`NWS responded with HTTP ${response.status}.`);
     error.status = response.status;
@@ -117,10 +117,10 @@ export async function fetchPoint(lat, lon, signal) {
 
 export async function fetchForecast(point, lat, lon, signal) {
   if (!point.forecastGridData) throw new Error('NWS returned no forecast grid for this point.');
-  const {properties} = await getNws(point.forecastGridData, signal);
+  const {properties} = await getNws(point.forecastGridData, signal, 'no-cache');
   const forecast = buildForecast(properties);
   if (!forecast.values.temperature.some(Number.isFinite)) throw new Error('NWS returned no upcoming temperatures for this point.');
-  return {...forecast, point, lat, lon};
+  return {...forecast, properties, point, lat, lon};
 }
 
 export function distanceMeters(a, b) {
