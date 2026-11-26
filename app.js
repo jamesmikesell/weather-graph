@@ -410,6 +410,19 @@ let results = [];
 let active = -1;
 let searchVersion = 0;
 let searchTimer;
+const bookmarkStorageKey = 'weather-grid-city-bookmarks';
+const bookmarks = new Map();
+try {
+  const saved = JSON.parse(localStorage.getItem(bookmarkStorageKey));
+  if (Array.isArray(saved)) {
+    for (const row of saved) {
+      if (Array.isArray(row) && typeof row[0] === 'string' && typeof row[1] === 'string'
+        && Number.isFinite(row[2]) && Number.isFinite(row[3])) bookmarks.set(cityKey(row), row);
+    }
+  }
+} catch {
+  // Bookmarks can still be used during this visit.
+}
 
 function closeSuggestions() {
   clearTimeout(searchTimer);
@@ -430,19 +443,104 @@ function cityLabel([name, state, , , detail]) {
   return detail ? `${name}, ${state} (${detail})` : `${name}, ${state}`;
 }
 
-function selectCity(index) {
-  const {row} = results[index];
+function cityKey(row) {
+  return JSON.stringify(row.slice(0, 4));
+}
+
+function alphabetical(a, b) {
+  return cityLabel(a.row).localeCompare(cityLabel(b.row), 'en');
+}
+
+function selectCity(row) {
   const [, , lat, lon] = row;
   const label = cityLabel(row);
-  city.value = label;
+  city.value = '';
   searchStatus.textContent = `Selected ${label}.`;
   choosePoint({lat, lon, name: label});
+}
+
+function showSuggestions(entries, message) {
+  results = entries;
+  suggestions.replaceChildren();
+  openSuggestions();
+  searchStatus.textContent = message;
+  if (!entries.length) {
+    const empty = document.createElement('li');
+    empty.className = 'search-message';
+    empty.setAttribute('role', 'row');
+    const cell = document.createElement('span');
+    cell.setAttribute('role', 'gridcell');
+    cell.textContent = message;
+    empty.append(cell);
+    suggestions.append(empty);
+  }
+  entries.forEach(({row}, i) => {
+    const key = cityKey(row);
+    const label = cityLabel(row);
+    const option = document.createElement('li');
+    option.setAttribute('role', 'row');
+    option.setAttribute('aria-selected', 'false');
+    const choice = document.createElement('span');
+    choice.id = `city-option-${i}`;
+    choice.className = 'city-choice';
+    choice.setAttribute('role', 'gridcell');
+    choice.textContent = label;
+    choice.addEventListener('pointerdown', event => event.preventDefault());
+    choice.addEventListener('click', () => {
+      city.focus();
+      selectCity(row);
+    });
+    const actions = document.createElement('span');
+    actions.setAttribute('role', 'gridcell');
+    const star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'city-bookmark';
+    star.setAttribute('aria-label', `Bookmark ${label}`);
+    function updateStar() {
+      const saved = bookmarks.has(key);
+      star.textContent = saved ? '★' : '☆';
+      star.title = saved ? `Remove bookmark for ${label}` : `Bookmark ${label}`;
+      star.setAttribute('aria-pressed', String(saved));
+    }
+    updateStar();
+    star.addEventListener('pointerdown', event => {
+      if (document.activeElement === city) event.preventDefault();
+    });
+    star.addEventListener('click', () => {
+      if (bookmarks.has(key)) {
+        if (!window.confirm(`Remove ${label} from your bookmarks?`)) return;
+        bookmarks.delete(key);
+      } else {
+        bookmarks.set(key, row);
+      }
+      try {
+        localStorage.setItem(bookmarkStorageKey, JSON.stringify([...bookmarks.values()]));
+      } catch {
+        // Keep the change available during this visit.
+      }
+      if (!normalize(city.value)) {
+        city.focus();
+        scheduleSearch();
+      } else {
+        updateStar();
+      }
+      searchStatus.textContent = bookmarks.has(key) ? `Bookmarked ${label}.` : `Removed bookmark for ${label}.`;
+    });
+    actions.append(star);
+    option.append(choice, actions);
+    suggestions.append(option);
+  });
 }
 
 function scheduleSearch() {
   closeSuggestions();
   searchStatus.textContent = '';
   const query = normalize(city.value);
+  if (!query && bookmarks.size) {
+    const saved = [...bookmarks.values()].map(row => ({row})).sort(alphabetical);
+    showSuggestions(saved, `${saved.length} bookmarked ${saved.length === 1 ? 'city' : 'cities'} available.`);
+    return;
+  }
   if (query.length < 2) return;
   const version = searchVersion;
   searchTimer = setTimeout(() => search(query, version), 180);
@@ -462,7 +560,7 @@ async function search(query, version) {
     const index = await dataset;
     if (version !== searchVersion) return;
     const [name, state] = query.split(',').map(part => part.trim());
-    results = index.flatMap(entry => {
+    const matches = index.flatMap(entry => {
       const code = entry.row[1].toLowerCase();
       const starts = entry.name.startsWith(name);
       const hasState = [entry.name, entry.base].some(place =>
@@ -472,46 +570,39 @@ async function search(query, version) {
       if (starts) return [{...entry, rank: 1}];
       if (entry.name.includes(name)) return [{...entry, rank: 2}];
       return [];
-    }).sort((a, b) => a.rank - b.rank || a.name.length - b.name.length).slice(0, 8);
-    suggestions.replaceChildren();
-    openSuggestions();
-    searchStatus.textContent = results.length ? `${results.length} suggestions available.` : 'No matching cities.';
-    if (!results.length) {
-      const empty = document.createElement('li');
-      empty.setAttribute('role', 'presentation');
-      empty.textContent = 'No matching cities';
-      suggestions.append(empty);
-    }
-    results.forEach(({row}, i) => {
-      const option = document.createElement('li');
-      option.id = `city-option-${i}`;
-      option.setAttribute('role', 'option');
-      option.setAttribute('aria-selected', 'false');
-      option.textContent = cityLabel(row);
-      option.addEventListener('pointerdown', event => event.preventDefault());
-      option.addEventListener('click', () => selectCity(i));
-      suggestions.append(option);
     });
+    const entries = matches.sort((a, b) => a.rank - b.rank || a.name.length - b.name.length).slice(0, 8);
+    showSuggestions(entries, entries.length ? `${entries.length} suggestions available.` : 'No matching cities.');
   } catch {
     if (version !== searchVersion) return;
-    searchStatus.textContent = 'City search could not load. Try again.';
-    const error = document.createElement('li');
-    error.textContent = searchStatus.textContent;
-    error.setAttribute('role', 'presentation');
-    suggestions.replaceChildren(error);
-    openSuggestions();
+    showSuggestions([], 'City search could not load. Try again.');
   }
 }
 
 city.addEventListener('input', scheduleSearch);
 city.addEventListener('focus', scheduleSearch);
-city.addEventListener('blur', closeSuggestions);
+city.addEventListener('click', () => {
+  if (suggestions.hidden && !normalize(city.value) && bookmarks.size) scheduleSearch();
+});
+const searchBox = city.parentElement;
+searchBox.addEventListener('focusout', event => {
+  if (!searchBox.contains(event.relatedTarget)) closeSuggestions();
+});
+document.addEventListener('pointerdown', event => {
+  if (!searchBox.contains(event.target)) closeSuggestions();
+});
+searchBox.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !suggestions.hidden) {
+    event.preventDefault();
+    city.focus();
+    closeSuggestions();
+  }
+});
 city.addEventListener('keydown', event => {
-  if (event.key === 'Escape') closeSuggestions();
   if (!results.length) return;
   if (event.key === 'Enter') {
     event.preventDefault();
-    selectCity(Math.max(0, active));
+    selectCity(results[Math.max(0, active)].row);
   }
   if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
   event.preventDefault();
@@ -519,6 +610,7 @@ city.addEventListener('keydown', event => {
     : (active + (event.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length;
   city.setAttribute('aria-activedescendant', `city-option-${active}`);
   [...suggestions.children].forEach((option, i) => option.setAttribute('aria-selected', String(i === active)));
+  suggestions.children[active].scrollIntoView({block: 'nearest'});
 });
 
 useLocation();

@@ -12,9 +12,9 @@
   <link rel="apple-touch-icon" sizes="180x180" href="icons/weather-grid-180.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=14">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin defer></script>
-  <script type="module" src="app.js?v=46"></script>
+  <script type="module" src="app.js?v=48"></script>
 </head>
 <body>
   <header class="site-header">
@@ -30,8 +30,8 @@
       <details id="location-panel" class="location card">
         <summary>Location &amp; Radar</summary>
         <div class="search">
-          <input id="city" type="search" aria-label="City and state" placeholder="Search U.S. cities" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions" autocomplete="off">
-          <ul id="suggestions" role="listbox" hidden></ul>
+          <input id="city" type="search" aria-label="City and state" placeholder="Search U.S. cities" role="combobox" aria-autocomplete="list" aria-haspopup="grid" aria-expanded="false" aria-controls="suggestions" autocomplete="off">
+          <ul id="suggestions" role="grid" aria-label="Cities" hidden></ul>
         </div>
         <p id="search-status" class="sr-only" role="status"></p>
         <p id="location-status" class="muted" role="status" hidden></p>
