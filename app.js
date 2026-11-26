@@ -41,7 +41,9 @@ try {
 
 let days = Number.isInteger(savedGraph?.days) && savedGraph.days >= 1 && savedGraph.days <= 7
   ? savedGraph.days : 7;
-let hiddenSeries = Array.isArray(savedGraph?.hiddenSeries) ? savedGraph.hiddenSeries : [];
+let hiddenSeries = Array.isArray(savedGraph?.hiddenSeries)
+  ? savedGraph.hiddenSeries
+  : ['dewpoint', 'heatIndex', 'windChill', 'windGust', 'relativeHumidity', 'snowRate', 'iceRate', 'liquidRate'];
 
 function saveGraph() {
   try {
